@@ -1,1 +1,80 @@
 
+require("dotenv").config();
+
+const {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  Events,
+} = require("discord.js");
+
+const client = new Client({
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildInvites,
+  ],
+  partials: [Partials.GuildMember],
+});
+
+const invites = new Map();
+const pendingInvites = new Map();
+
+client.once(Events.ClientReady, async () => {
+  console.log(`Logged in as ${client.user.tag}`);
+
+  for (const guild of client.guilds.cache.values()) {
+    const guildInvites = await guild.invites.fetch();
+    invites.set(guild.id, guildInvites);
+  }
+});
+
+client.on(Events.InviteCreate, async (invite) => {
+  const guildInvites = await invite.guild.invites.fetch();
+  invites.set(invite.guild.id, guildInvites);
+});
+
+client.on(Events.InviteDelete, async (invite) => {
+  const guildInvites = await invite.guild.invites.fetch();
+  invites.set(invite.guild.id, guildInvites);
+});
+
+client.on(Events.GuildMemberAdd, async (member) => {
+  const oldInvites = invites.get(member.guild.id);
+  const newInvites = await member.guild.invites.fetch();
+
+  invites.set(member.guild.id, newInvites);
+
+  const usedInvite = newInvites.find(
+    (i) => oldInvites.get(i.code)?.uses < i.uses
+  );
+
+  if (usedInvite) {
+    pendingInvites.set(member.id, {
+      inviter: usedInvite.inviter.tag,
+      code: usedInvite.code,
+    });
+
+    console.log(
+      `${member.user.tag} joined using ${usedInvite.code}`
+    );
+  }
+});
+
+client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
+  if (!oldMember.pending && newMember.pending) return;
+
+  if (oldMember.pending && !newMember.pending) {
+    const data = pendingInvites.get(newMember.id);
+
+    if (data) {
+      console.log(
+        `${newMember.user.tag} accepted rules. Invite by ${data.inviter} is now counted.`
+      );
+
+      pendingInvites.delete(newMember.id);
+    }
+  }
+});
+
+client.login(process.env.TOKEN);
