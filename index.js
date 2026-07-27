@@ -79,5 +79,28 @@ pendingInvites.delete(newMember.id);
     }
   }
 });
-const db = require("./database");
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
 
+  try {
+    if (interaction.commandName === "invites") {
+      const user = interaction.options.getUser("user") || interaction.user;
+      const count = db.getInvites(user.id);
+
+      await interaction.reply({
+        content: `📨 ${user.username} has **${count}** valid invites.`,
+      });
+    }
+  } catch (err) {
+    console.error(err);
+
+    if (!interaction.replied) {
+      await interaction.reply({
+        content: "❌ Error while executing command.",
+        ephemeral: true,
+      });
+    }
+  }
+});
+
+client.login(process.env.TOKEN);
