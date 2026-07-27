@@ -51,9 +51,10 @@ client.on(Events.GuildMemberAdd, async (member) => {
 
   if (usedInvite) {
     pendingInvites.set(member.id, {
-      inviter: usedInvite.inviter.tag,
-      code: usedInvite.code,
-    });
+  inviterId: usedInvite.inviter.id,
+  inviterTag: usedInvite.inviter.tag,
+  code: usedInvite.code,
+});
 
     console.log(
       `${member.user.tag} joined using ${usedInvite.code}`
@@ -68,11 +69,13 @@ client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
     const data = pendingInvites.get(newMember.id);
 
     if (data) {
-      console.log(
-        `${newMember.user.tag} accepted rules. Invite by ${data.inviter} is now counted.`
-      );
+      db.addInvite(data.inviterId);
 
-      pendingInvites.delete(newMember.id);
+console.log(
+`${newMember.user.tag} accepted rules. Invite by ${data.inviterTag} counted.`
+);
+
+pendingInvites.delete(newMember.id);
     }
   }
 });
