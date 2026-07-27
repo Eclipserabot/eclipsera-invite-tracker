@@ -1,107 +1,57 @@
-
-require("dotenv").config();
-const db = require("./database");
-const {
-  Client,
-  GatewayIntentBits,
-  Partials,
-  Events,
-} = require("discord.js");
+const { Client, GatewayIntentBits, Events, EmbedBuilder } = require('discord.js');
+const { initDB, addInvite, getInvites, setRulesAccepted, hasAcceptedRules } = require('./database');
+require('dotenv').config();
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildInvites,
-  ],
-  partials: [Partials.GuildMember],
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
 const invites = new Map();
-const pendingInvites = new Map();
 
 client.once(Events.ClientReady, async () => {
-  console.log(`Logged in as ${client.user.tag}`);
-
-  for (const guild of client.guilds.cache.values()) {
+  console.log(`Bot online: ${client.user.tag}`);
+  await initDB(); // Database start
+  
+  // सारे server के invites cache करो
+  client.guilds.cache.forEach(async guild => {
     const guildInvites = await guild.invites.fetch();
     invites.set(guild.id, guildInvites);
-  }
-});
-
-client.on(Events.InviteCreate, async (invite) => {
-  const guildInvites = await invite.guild.invites.fetch();
-  invites.set(invite.guild.id, guildInvites);
-});
-
-client.on(Events.InviteDelete, async (invite) => {
-  const guildInvites = await invite.guild.invites.fetch();
-  invites.set(invite.guild.id, guildInvites);
-});
-
-client.on(Events.GuildMemberAdd, async (member) => {
-  const oldInvites = invites.get(member.guild.id);
-  const newInvites = await member.guild.invites.fetch();
-
-  invites.set(member.guild.id, newInvites);
-
-  const usedInvite = newInvites.find(
-    (i) => oldInvites.get(i.code)?.uses < i.uses
-  );
-
-  if (usedInvite) {
-    pendingInvites.set(member.id, {
-  inviterId: usedInvite.inviter.id,
-  inviterTag: usedInvite.inviter.tag,
-  code: usedInvite.code,
-});
-
-    console.log(
-      `${member.user.tag} joined using ${usedInvite.code}`
-    );
-  }
-});
-
-client.on(Events.GuildMemberUpdate, async (oldMember, newMember) => {
-  if (!oldMember.pending && newMember.pending) return;
-
-  if (oldMember.pending && !newMember.pending) {
-    const data = pendingInvites.get(newMember.id);
-
-    if (data) {
-      db.addInvite(data.inviterId);
-
-console.log(
-`${newMember.user.tag} accepted rules. Invite by ${data.inviterTag} counted.`
-);
-
-pendingInvites.delete(newMember.id);
-    }
-  }
-});
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
-  try {
-    if (interaction.commandName === "invites") {
-      const user = interaction.options.getUser("user") || interaction.user;
-      const count = db.getInvites(user.id);
-
-      await interaction.reply({
-        content: `📨 ${user.username} has **${count}** valid invites.`,
-      });
-    }
-  } catch (err) {
-    console.error(err);
-
-    if (!interaction.replied) {
-  await interaction.reply({
-    content: "❌ Error while executing command.",
-    ephemeral: true,
   });
-    }
+});
+
+client.on(Events.GuildMemberAdd, async member => {
+  const guild = member.guild;
+  const newInvites = await guild.invites.fetch();
+  const oldInvites = invites.get(guild.id);
   
-    }
+  const invite = newInvites.find(inv => oldInvites.get(inv.code).uses < inv.uses);
+  invites.set(guild.id, newInvites);
+  
+  if (invite && invite.inviter) {
+    await addInvite(invite.inviter.id);
+    console.log(`${member.user.tag} joined by ${invite.inviter.tag}`);
+  }
+});
+
+client.on(Events.InteractionCreate, async interaction => {
+  if (!interaction.isChatInputCommand()) return;
+  
+  if (interaction.commandName === 'invites') {
+    const user = interaction.options.getUser('user') || interaction.user;
+    const count = await getInvites(user.id);
+    
+    const embed = new EmbedBuilder()
+     .setTitle(`${user.username} के Invites`)
+     .setDescription(`**Total Invites: ${count}**`)
+     .setColor(0x5865F2);
+      
+    await interaction.reply({ embeds: [embed] });
   }
 });
 
