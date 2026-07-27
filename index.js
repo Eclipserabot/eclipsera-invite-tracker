@@ -79,5 +79,19 @@ pendingInvites.delete(newMember.id);
     }
   }
 });
+const db = require("./database");
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
 
+  if (interaction.commandName === "invites") {
+    const user = interaction.options.getUser("user") || interaction.user;
+
+    const count = db.getInvites(user.id);
+
+    await interaction.reply({
+      content: `📨 ${user.username} has **${count}** valid invites.`,
+      ephemeral: false,
+    });
+  }
+});
 client.login(process.env.TOKEN);
