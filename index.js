@@ -1,6 +1,6 @@
 
 require("dotenv").config();
-
+const db = require("./database");
 const {
   Client,
   GatewayIntentBits,
