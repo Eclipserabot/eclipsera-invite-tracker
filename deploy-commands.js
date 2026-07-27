@@ -4,10 +4,10 @@ require('dotenv').config();
 const commands = [
   new SlashCommandBuilder()
     .setName('invites')
-    .setDescription('किसी का invite count देखो')
+    .setDescription('Check a user's invite count')
     .addUserOption(option =>
       option.setName('user')
-        .setDescription('जिसका count देखना है')
+        .setDescription('Select a user')
         .setRequired(false))
     .toJSON()
 ];
