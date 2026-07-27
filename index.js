@@ -95,7 +95,11 @@ client.on(Events.InteractionCreate, async (interaction) => {
     console.error(err);
 
     if (!interaction.replied) {
-      await interaction.reply({
+  await interaction.reply({
+    content: "❌ Error while executing command.",
+    ephemeral: true,
+  });
+    }
         content: "❌ Error while executing command.",
         ephemeral: true,
       });
