@@ -100,9 +100,7 @@ client.on(Events.InteractionCreate, async (interaction) => {
     ephemeral: true,
   });
     }
-        content: "❌ Error while executing command.",
-        ephemeral: true,
-      });
+  
     }
   }
 });
