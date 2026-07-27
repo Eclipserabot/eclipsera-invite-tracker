@@ -1,57 +1,86 @@
-const { Client, GatewayIntentBits, Events, EmbedBuilder } = require('discord.js');
-const { initDB, addInvite, getInvites, setRulesAccepted, hasAcceptedRules } = require('./database');
-require('dotenv').config();
+require("dotenv").config();
+
+const {
+  Client,
+  GatewayIntentBits,
+  Partials,
+  Events,
+  EmbedBuilder,
+} = require("discord.js");
+
+const db = require("./database");
 
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildMembers,
     GatewayIntentBits.GuildInvites,
-    GatewayIntentBits.GuildMessages,
-    GatewayIntentBits.MessageContent
-  ]
+  ],
+  partials: [Partials.GuildMember],
 });
 
 const invites = new Map();
 
 client.once(Events.ClientReady, async () => {
-  console.log(`Bot online: ${client.user.tag}`);
-  await initDB(); // Database start
-  
-  // सारे server के invites cache करो
-  client.guilds.cache.forEach(async guild => {
-    const guildInvites = await guild.invites.fetch();
-    invites.set(guild.id, guildInvites);
-  });
-});
+  console.log(`Logged in as ${client.user.tag}`);
 
-client.on(Events.GuildMemberAdd, async member => {
-  const guild = member.guild;
-  const newInvites = await guild.invites.fetch();
-  const oldInvites = invites.get(guild.id);
-  
-  const invite = newInvites.find(inv => oldInvites.get(inv.code).uses < inv.uses);
-  invites.set(guild.id, newInvites);
-  
-  if (invite && invite.inviter) {
-    await addInvite(invite.inviter.id);
-    console.log(`${member.user.tag} joined by ${invite.inviter.tag}`);
+  for (const guild of client.guilds.cache.values()) {
+    try {
+      const guildInvites = await guild.invites.fetch();
+      invites.set(guild.id, guildInvites);
+    } catch (err) {
+      console.error(err);
+    }
   }
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+client.on(Events.InviteCreate, async (invite) => {
+  const guildInvites = await invite.guild.invites.fetch();
+  invites.set(invite.guild.id, guildInvites);
+});
+
+client.on(Events.InviteDelete, async (invite) => {
+  const guildInvites = await invite.guild.invites.fetch();
+  invites.set(invite.guild.id, guildInvites);
+});
+client.on(Events.GuildMemberAdd, async (member) => {
+  const oldInvites = invites.get(member.guild.id);
+  const newInvites = await member.guild.invites.fetch();
+
+  invites.set(member.guild.id, newInvites);
+
+  const usedInvite = newInvites.find(
+    (i) => oldInvites.get(i.code)?.uses < i.uses
+  );
+
+  if (usedInvite) {
+    db.addInvite(usedInvite.inviter.id);
+
+    console.log(
+      `${member.user.tag} joined using ${usedInvite.code}`
+    );
+  }
+});
+
+client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
-  
-  if (interaction.commandName === 'invites') {
-    const user = interaction.options.getUser('user') || interaction.user;
-    const count = await getInvites(user.id);
-    
+
+  if (interaction.commandName === "invites") {
+    const user =
+      interaction.options.getUser("user") || interaction.user;
+
+    const count = db.getInvites(user.id);
+
     const embed = new EmbedBuilder()
-     .setTitle(`${user.username} के Invites`)
-     .setDescription(`**Total Invites: ${count}**`)
-     .setColor(0x5865F2);
-      
-    await interaction.reply({ embeds: [embed] });
+      .setColor(0x5865f2)
+      .setTitle("Invite Count")
+      .setDescription(
+        `👤 **${user.username}** has **${count}** valid invites.`
+      );
+
+    await interaction.reply({
+      embeds: [embed],
+    });
   }
 });
 
