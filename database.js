@@ -1,28 +1,28 @@
-const { REST, Routes, SlashCommandBuilder } = require('discord.js');
-require('dotenv').config();
+const fs = require("fs");
 
-const commands = [
-  new SlashCommandBuilder()
-    .setName('invites')
-    .setDescription('किसी का invite count देखो')
-    .addUserOption(option =>
-      option.setName('user')
-        .setDescription('जिसका count देखना है')
-        .setRequired(false))
-    .toJSON()
-];
+const FILE = "./invites.json";
 
-const rest = new REST({ version: '10' }).setToken(process.env.TOKEN);
+function load() {
+  if (!fs.existsSync(FILE)) return {};
+  return JSON.parse(fs.readFileSync(FILE, "utf8"));
+}
 
-(async () => {
-  try {
-    console.log('Slash commands register हो रहे हैं...');
-    await rest.put(
-      Routes.applicationGuildCommands(process.env.CLIENT_ID, process.env.GUILD_ID),
-      { body: commands },
-    );
-    console.log('Command register हो गई!');
-  } catch (error) {
-    console.error(error);
-  }
-})();
+function save(data) {
+  fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+}
+
+function addInvite(userId) {
+  const data = load();
+  data[userId] = (data[userId] || 0) + 1;
+  save(data);
+}
+
+function getInvites(userId) {
+  const data = load();
+  return data[userId] || 0;
+}
+
+module.exports = {
+  addInvite,
+  getInvites,
+};
