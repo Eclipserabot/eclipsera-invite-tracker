@@ -1,14 +1,13 @@
 {
-  "name": "invite-tracker-bot",
+  "name": "invite-bot",
   "version": "1.0.0",
-  "description": "Discord Invite Tracker with Rules Verification",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
+    "@androz2091/discord-invites-tracker": "^1.2.3",
     "discord.js": "^14.16.3",
-    "dotenv": "^16.4.5",
-    "@androz2091/discord-invites-tracker": "^1.2.3"
+    "dotenv": "^16.4.5"
   }
 }
