@@ -50,7 +50,8 @@ client.on(Events.GuildMemberAdd, async (member) => {
     
   const oldInvites = invites.get(member.guild.id);
 const newInvites = await member.guild.invites.fetch();
-
+console.log(oldInvites);
+console.log(newInvites);
 invites.set(member.guild.id, newInvites);
 
 let usedInvite = null;
@@ -63,7 +64,7 @@ for (const invite of newInvites.values()) {
         break;
     }
 }
-
+console.log("Used Invite:", usedInvite);
   if (usedInvite) {
     db.addInvite(usedInvite.inviter.id);
 
