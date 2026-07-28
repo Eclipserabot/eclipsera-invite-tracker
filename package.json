@@ -6,9 +6,8 @@
   "scripts": {
     "start": "node index.js"
   },
-  "dependencies": {
-    "discord.js": "^14.16.3",
-    "discord-invites-tracker": "^2.1.2",
-    "dotenv": "^16.4.5"
-  }
+"dependencies": {
+  "discord.js": "^14.16.3",
+  "dotenv": "^16.4.5",
+  "@androz2091/discord-invites-tracker": "^1.2.3"
 }
