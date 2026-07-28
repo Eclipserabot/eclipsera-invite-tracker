@@ -78,34 +78,47 @@ client.on(Events.GuildMemberAdd, async (member) => {
 
     const oldInvites = invites.get(member.guild.id);
 
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
     let newInvites;
 
     try {
+
         newInvites = await member.guild.invites.fetch();
+
         invites.set(member.guild.id, newInvites);
+
     } catch (err) {
-        console.error("Failed to fetch invites:", err);
+
+        console.error(err);
+
         return;
+
     }
 
     const usedInvite = newInvites.find(invite => {
+
         const old = oldInvites?.get(invite.code);
-        return old && invite.uses > old.uses;
+
+        if (!old) return false;
+
+        return invite.uses > old.uses;
+
     });
 
     if (!usedInvite) {
-        console.log(`${member.user.tag} joined but invite not detected.`);
+
+        console.log("Invite still not detected.");
+
         return;
+
     }
 
     console.log(
-        `${member.user.tag} joined using ${usedInvite.code} by ${usedInvite.inviter.tag}`
+        `${member.user.tag} joined using ${usedInvite.code} invited by ${usedInvite.inviter.tag}`
     );
 
-    db.addPending(
-        member.id,
-        usedInvite.inviter.id
-    );
+    db.addPending(member.id, usedInvite.inviter.id);
 
 });
 // Count Messages
