@@ -103,14 +103,15 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (interaction.commandName === "invites") {
 
-        let invites = db.invites[interaction.user.id] || 0;
+    const target = interaction.options.getUser("user") || interaction.user;
 
-        await interaction.reply({
-            content: `📨 ${interaction.user.username} has **${invites}** verified invite(s).`
-        });
+    const invites = db.invites[target.id] || 0;
+
+    await interaction.reply({
+        content: `📨 ${target.username} has **${invites}** verified invite(s).`
+    });
 
     }
-
     if (interaction.commandName === "top") {
 
         const sorted = Object.entries(db.invites)
