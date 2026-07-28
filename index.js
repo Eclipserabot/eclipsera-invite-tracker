@@ -128,4 +128,20 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
             const [id, invites] = leaderboard[i];
 
-            text += `**${i + 1}.** <@${id}> — **${invites}** invites
+            text += `**${i + 1}.** <@${id}> — **${invites}** invites.
+            \n`;
+        }
+
+        const embed = new EmbedBuilder()
+            .setColor(0x57F287)
+            .setTitle("Invite Leaderboard")
+            .setDescription(text);
+
+        await interaction.reply({
+            embeds: [embed],
+        });
+    }
+});
+
+client.login(process.env.TOKEN);
+            
