@@ -99,21 +99,38 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!interaction.isChatInputCommand()) return;
 
+    const db = loadDB();
+
     if (interaction.commandName === "invites") {
 
+        let invites = db.invites[interaction.user.id] || 0;
+
         await interaction.reply({
-            content: "✅ Bot is working! Invite system is under setup.",
-            ephemeral: true
+            content: `📨 ${interaction.user.username} has **${invites}** verified invite(s).`
         });
 
     }
 
     if (interaction.commandName === "top") {
 
-        await interaction.reply({
-            content: "🏆 Leaderboard is under setup.",
-            ephemeral: true
-        });
+        const sorted = Object.entries(db.invites)
+            .sort((a, b) => b[1] - a[1]);
+
+        if (sorted.length === 0) {
+            return interaction.reply("No verified invites yet.");
+        }
+
+        let text = "🏆 **Invite Leaderboard**\n\n";
+
+        for (let i = 0; i < sorted.length; i++) {
+
+            const user = await client.users.fetch(sorted[i][0]).catch(() => null);
+
+            text += `${i + 1}. ${user ? user.tag : sorted[i][0]} - ${sorted[i][1]}\n`;
+
+        }
+
+        await interaction.reply(text);
 
     }
 
