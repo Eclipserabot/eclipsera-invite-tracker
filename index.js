@@ -49,13 +49,20 @@ client.on(Events.GuildMemberAdd, async (member) => {
 
     
   const oldInvites = invites.get(member.guild.id);
-  const newInvites = await member.guild.invites.fetch();
+const newInvites = await member.guild.invites.fetch();
 
-  invites.set(member.guild.id, newInvites);
+invites.set(member.guild.id, newInvites);
 
-  const usedInvite = newInvites.find(
-    (i) => oldInvites.get(i.code)?.uses < i.uses
-  );
+let usedInvite = null;
+
+for (const invite of newInvites.values()) {
+    const oldInvite = oldInvites?.get(invite.code);
+
+    if (!oldInvite || invite.uses > oldInvite.uses) {
+        usedInvite = invite;
+        break;
+    }
+}
 
   if (usedInvite) {
     db.addInvite(usedInvite.inviter.id);
