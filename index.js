@@ -44,6 +44,10 @@ client.on(Events.InviteDelete, async (invite) => {
   invites.set(invite.guild.id, guildInvites);
 });
 client.on(Events.GuildMemberAdd, async (member) => {
+  
+    console.log(`${member.user.tag} joined the server`);
+
+    
   const oldInvites = invites.get(member.guild.id);
   const newInvites = await member.guild.invites.fetch();
 
