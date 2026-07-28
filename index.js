@@ -117,4 +117,28 @@ client.on(Events.InteractionCreate, async (interaction) => {
     }
 
 });
+client.on(Events.MessageCreate, (message) => {
+
+    if (message.author.bot) return;
+    if (!message.guild) return;
+
+    const db = loadDB();
+
+    const pending = db.pending[message.author.id];
+
+    if (!pending) return;
+
+    if (!db.messages[message.author.id]) {
+        db.messages[message.author.id] = 0;
+    }
+
+    db.messages[message.author.id]++;
+
+    console.log(
+        `${message.author.tag} : ${db.messages[message.author.id]}/5`
+    );
+
+    saveDB(db);
+
+});
 client.login(process.env.TOKEN);
