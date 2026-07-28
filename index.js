@@ -33,5 +33,45 @@ client.once(Events.ClientReady, async () => {
 
   console.log("Invite cache loaded.");
 });
+client.on(Events.GuildMemberAdd, async (member) => {
 
+    const guild = member.guild;
+
+    const oldCache = inviteCache.get(guild.id);
+
+    await new Promise(resolve => setTimeout(resolve, 3000));
+
+    const invites = await guild.invites.fetch();
+
+    let usedInvite = null;
+
+    for (const invite of invites.values()) {
+
+        const oldUses = oldCache?.get(invite.code) ?? 0;
+
+        if (invite.uses > oldUses) {
+            usedInvite = invite;
+            break;
+        }
+
+    }
+
+    const newCache = new Collection();
+
+    invites.forEach(invite => {
+        newCache.set(invite.code, invite.uses);
+    });
+
+    inviteCache.set(guild.id, newCache);
+
+    if (!usedInvite) {
+        console.log("❌ Invite detect nahi hua.");
+        return;
+    }
+
+    console.log(
+        `✅ ${member.user.tag} joined using ${usedInvite.code} | Inviter: ${usedInvite.inviter?.tag}`
+    );
+
+});
 client.login(process.env.TOKEN);
