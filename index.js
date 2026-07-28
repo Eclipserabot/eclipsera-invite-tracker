@@ -12,6 +12,10 @@ const {
 
 const db = require("./database");
 
+const TOKEN = process.env.TOKEN;
+const CLIENT_ID = process.env.CLIENT_ID;
+const GUILD_ID = process.env.GUILD_ID;
+
 const client = new Client({
     intents: [
         GatewayIntentBits.Guilds,
@@ -31,35 +35,36 @@ const commands = [
     new SlashCommandBuilder()
         .setName("top")
         .setDescription("Show invite leaderboard")
-].map(command => command.toJSON());
+].map(cmd => cmd.toJSON());
 
 client.once(Events.ClientReady, async () => {
 
-    console.log(`Logged in as ${client.user.tag}`);
+    console.log(`✅ Logged in as ${client.user.tag}`);
 
-    const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+    const rest = new REST({ version: "10" }).setToken(TOKEN);
 
     await rest.put(
         Routes.applicationGuildCommands(
-            process.env.CLIENT_ID,
-            process.env.GUILD_ID
+            CLIENT_ID,
+            GUILD_ID
         ),
-        {
-            body: commands
-        }
+        { body: commands }
     );
 
-    const guild = await client.guilds.fetch(process.env.GUILD_ID);
+    const guild = await client.guilds.fetch(GUILD_ID);
 
     const invites = await guild.invites.fetch();
 
-    inviteCache.set(guild.id, new Collection());
+    const cache = new Collection();
 
     invites.forEach(invite => {
-        inviteCache.get(guild.id).set(invite.code, invite);
+        cache.set(invite.code, invite);
     });
 
-    console.log("Invite cache loaded.");
+    inviteCache.set(guild.id, cache);
+
+    console.log("✅ Invite cache loaded.");
+
 });
 client.on(Events.InviteCreate, invite => {
 
@@ -106,18 +111,25 @@ client.on(Events.GuildMemberAdd, async member => {
 
     }
 
-    inviteCache.set(guild.id, new Collection());
+    const cache = new Collection();
 
-    for (const invite of newInvites.values()) {
-        inviteCache.get(guild.id).set(invite.code, invite);
-    }
+    newInvites.forEach(invite => {
+        cache.set(invite.code, invite);
+    });
+
+    inviteCache.set(guild.id, cache);
 
     if (!usedInvite) {
-        console.log("Could not detect used invite.");
+
+        console.log(`❌ Could not detect invite for ${member.user.tag}`);
+
         return;
+
     }
 
-    console.log(`${member.user.tag} joined using ${usedInvite.code}`);
+    console.log(
+        `✅ ${member.user.tag} joined using ${usedInvite.code}`
+    );
 
     db.addPending(
         member.id,
@@ -126,20 +138,16 @@ client.on(Events.GuildMemberAdd, async member => {
     );
 
 });
-
 client.on(Events.MessageCreate, async message => {
 
     if (message.author.bot) return;
     if (!message.guild) return;
 
-    const pending = db.getPending(
-        message.author.id,
-        message.guild.id
-    );
+    const invite = db.getInvite(message.author.id);
 
-    if (!pending) return;
+    if (!invite) return;
 
-    if (pending.verified) return;
+    if (invite.verified) return;
 
     const count = db.addMessage(
         message.author.id,
@@ -148,13 +156,10 @@ client.on(Events.MessageCreate, async message => {
 
     if (count >= 5) {
 
-        db.verifyInvite(
-            message.author.id,
-            message.guild.id
-        );
+        db.verify(message.author.id);
 
         console.log(
-            `${message.author.tag} completed 5 messages. Invite verified.`
+            `✅ ${message.author.tag} completed 5 messages. Invite verified.`
         );
 
     }
@@ -167,13 +172,13 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (interaction.commandName === "invites") {
 
-        const count = db.getInviteCount(
+        const total = db.getInviteCount(
             interaction.user.id,
             interaction.guild.id
         );
 
         await interaction.reply({
-            content: `✅ You have **${count} verified invite(s).**`,
+            content: `🎉 You have **${total} verified invite(s).**`,
             ephemeral: true
         });
 
@@ -181,19 +186,21 @@ client.on(Events.InteractionCreate, async interaction => {
 
     if (interaction.commandName === "top") {
 
-        const top = db.getLeaderboard(interaction.guild.id);
+        const list = db.leaderboard(interaction.guild.id);
 
-        if (top.length === 0) {
+        if (list.length === 0) {
             return interaction.reply("No verified invites yet.");
         }
 
-        let text = "**🏆 Invite Leaderboard**\n\n";
+        let text = "🏆 **Invite Leaderboard**\n\n";
 
-        for (let i = 0; i < top.length; i++) {
+        for (let i = 0; i < list.length; i++) {
 
-            const user = await client.users.fetch(top[i].inviterId).catch(() => null);
+            const user = await client.users
+                .fetch(list[i].inviterId)
+                .catch(() => null);
 
-            text += `${i + 1}. ${user ? user.tag : top[i].inviterId} — ${top[i].count}\n`;
+            text += `${i + 1}. ${user ? user.tag : list[i].inviterId} — ${list[i].total}\n`;
 
         }
 
@@ -202,4 +209,5 @@ client.on(Events.InteractionCreate, async interaction => {
     }
 
 });
-client.login(process.env.TOKEN);
+
+client.login(TOKEN);
