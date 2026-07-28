@@ -1,199 +1,66 @@
-require("dotenv").config();
-
-const {
-    Client,
-    GatewayIntentBits,
-    Partials,
-    Collection,
-    EmbedBuilder,
-    Events
-} = require("discord.js");
-
-const db = require("./database");
+const { Client, GatewayIntentBits, Events, EmbedBuilder } = require('discord.js');
+const { initDB, addInvite, getInvites } = require('./database');
+require('dotenv').config();
 
 const client = new Client({
-    intents: [
-        GatewayIntentBits.Guilds,
-        GatewayIntentBits.GuildMembers,
-        GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.MessageContent
-    ],
-    partials: [
-        Partials.Channel
-    ]
+  intents: [
+    GatewayIntentBits.Guilds,
+    GatewayIntentBits.GuildMembers,
+    GatewayIntentBits.GuildInvites,
+    GatewayIntentBits.GuildMessages,
+    GatewayIntentBits.MessageContent
+  ]
 });
 
-// Invite Cache
-const invites = new Collection();
+const invites = new Map();
+const pendingInvites = new Map(); // userId: inviterId
+const messageCount = new Map(); // userId: count
 
 client.once(Events.ClientReady, async () => {
+  console.log(`Bot online: ${client.user.tag}`);
+  await initDB();
+  
+  client.guilds.cache.forEach(async guild => {
+    const guildInvites = await guild.invites.fetch();
+    invites.set(guild.id, guildInvites);
+  });
+});
 
-    console.log(`${client.user.tag} is online!`);
-
-    for (const guild of client.guilds.cache.values()) {
-
-        try {
-
-            const guildInvites = await guild.invites.fetch();
-
-            invites.set(guild.id, guildInvites);
-
-            console.log(
-                `Cached ${guildInvites.size} invites for ${guild.name}`
-            );
-
-        } catch (err) {
-
-            console.log(
-                `Couldn't cache invites for ${guild.name}`
-            );
-
-        }
-
+// When someone joins
+client.on(Events.GuildMemberAdd, async member => {
+  const guild = member.guild;
+  const newInvites = await guild.invites.fetch();
+  const oldInvites = invites.get(guild.id);
+  
+  const invite = newInvites.find(inv => {
+    const oldInvite = oldInvites.get(inv.code);
+    return oldInvite && oldInvite.uses < inv.uses;
+  });
+  invites.set(guild.id, newInvites);
+  
+  if (invite && invite.inviter) {
+    // Save who invited this person, but DON'T count yet
+    pendingInvites.set(member.id, invite.inviter.id);
+    messageCount.set(member.id, 0); // Start from 0 messages
+    
+    const welcomeChannel = guild.channels.cache.find(ch => ch.name === 'general');
+    if(welcomeChannel) {
+      welcomeChannel.send(`${member}, Welcome! Send 5 messages to complete your invite.`);
     }
-
+    console.log(`${member.user.tag} joined via ${invite.inviter.tag}. Waiting for 5 messages...`);
+  }
 });
 
-// New Invite Created
-client.on(Events.InviteCreate, invite => {
-
-    const guildInvites = invites.get(invite.guild.id);
-
-    if (guildInvites)
-        guildInvites.set(invite.code, invite);
-
-});
-
-// Invite Deleted
-client.on(Events.InviteDelete, invite => {
-
-    const guildInvites = invites.get(invite.guild.id);
-
-    if (guildInvites)
-        guildInvites.delete(invite.code);
-
-});
-// Member Joined
-client.on(Events.GuildMemberAdd, async (member) => {
-
-    const oldInvites = invites.get(member.guild.id);
-
-    await new Promise(resolve => setTimeout(resolve, 3000));
-
-    let newInvites;
-
-    try {
-
-        newInvites = await member.guild.invites.fetch();
-
-        invites.set(member.guild.id, newInvites);
-
-    } catch (err) {
-
-        console.error(err);
-
-        return;
-
-    }
-
-    const usedInvite = newInvites.find(invite => {
-
-        const old = oldInvites?.get(invite.code);
-
-        if (!old) return false;
-
-        return invite.uses > old.uses;
-
-    });
-
-    if (!usedInvite) {
-
-        console.log("Invite still not detected.");
-
-        return;
-
-    }
-
-    console.log(
-        `${member.user.tag} joined using ${usedInvite.code} invited by ${usedInvite.inviter.tag}`
-    );
-
-    db.addPending(member.id, usedInvite.inviter.id);
-
-});
-// Count Messages
-client.on(Events.MessageCreate, async (message) => {
-
-    if (message.author.bot) return;
-
-    if (!message.guild) return;
-
-    const count = db.addMessage(message.author.id);
-
-    if (count !== 5) return;
-
-    const inviter = db.completeInvite(message.author.id);
-
-    if (!inviter) return;
-
-    console.log(
-        `${message.author.tag} completed verification. Invite credited to ${inviter}`
-    );
-
-});
-
-// Slash Commands
-client.on(Events.InteractionCreate, async (interaction) => {
-
-    if (!interaction.isChatInputCommand()) return;
-
-    if (interaction.commandName === "invites") {
-
-        const invites = db.getInvites(interaction.user.id);
-
-        const embed = new EmbedBuilder()
-            .setTitle("Your Invites")
-            .setDescription(`✅ Verified Invites: **${invites}**`)
-            .setColor("Green");
-
-        return interaction.reply({
-            embeds: [embed]
-        });
-
-    }
-
-    if (interaction.commandName === "leaderboard") {
-
-        const leaderboard = db.getLeaderboard();
-
-        if (!leaderboard.length) {
-
-            return interaction.reply({
-                content: "No verified invites yet."
-            });
-
-        }
-
-        let text = "";
-
-        leaderboard.slice(0, 10).forEach((user, index) => {
-
-            text += `${index + 1}. <@${user[0]}> — **${user[1]}** invites\n`;
-
-        });
-
-        const embed = new EmbedBuilder()
-            .setTitle("🏆 Invite Leaderboard")
-            .setDescription(text)
-            .setColor("Gold");
-
-        return interaction.reply({
-            embeds: [embed]
-        });
-
-    }
-
-});
-
-// Login
-client.login(process.env.TOKEN);
+// Count messages
+client.on(Events.MessageCreate, async message => {
+  if (message.author.bot) return; // Ignore bots
+  
+  const userId = message.author.id;
+  
+  // Check if this user is in pending list
+  if (pendingInvites.has(userId)) {
+    let count = messageCount.get(userId) || 0;
+    count++;
+    messageCount.set(userId, count);
+    
+    console.log(`${message.author.tag} message count:
