@@ -1,77 +1,40 @@
-const fs = require("fs");
+const sqlite3 = require('sqlite3').verbose();
+const path = require('path');
 
-const FILE = "./database.json";
+const db = new sqlite3.Database(path.resolve(__dirname, 'invites.db'));
 
-function load() {
-    if (!fs.existsSync(FILE)) {
-        fs.writeFileSync(FILE, JSON.stringify({
-            invites: {},
-            pending: {},
-            messages: {}
-        }, null, 2));
-    }
-
-    return JSON.parse(fs.readFileSync(FILE));
+function initDB() {
+  return new Promise((resolve, reject) => {
+    db.run(`
+      CREATE TABLE IF NOT EXISTS invites (
+        userId TEXT PRIMARY KEY,
+        count INTEGER DEFAULT 0
+      )
+    `, (err) => {
+      if (err) reject(err);
+      else resolve();
+    });
+  });
 }
 
-function save(data) {
-    fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
+function addInvite(userId) {
+  return new Promise((resolve, reject) => {
+    db.run(`INSERT INTO invites (userId, count) VALUES (?, 1)
+            ON CONFLICT(userId) DO UPDATE SET count = count + 1`,
+      [userId], (err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+  });
 }
 
-module.exports = {
+function getInvites(userId) {
+  return new Promise((resolve, reject) => {
+    db.get(`SELECT count FROM invites WHERE userId =?`, [userId], (err, row) => {
+      if (err) reject(err);
+      else resolve(row? row.count : 0);
+    });
+  });
+}
 
-    addPending(memberId, inviterId) {
-        const db = load();
-
-        db.pending[memberId] = inviterId;
-        db.messages[memberId] = 0;
-
-        save(db);
-    },
-
-    addMessage(memberId) {
-        const db = load();
-
-        if (!(memberId in db.messages)) return 0;
-
-        db.messages[memberId]++;
-
-        save(db);
-
-        return db.messages[memberId];
-    },
-
-    completeInvite(memberId) {
-        const db = load();
-
-        const inviter = db.pending[memberId];
-
-        if (!inviter) return null;
-
-        if (!db.invites[inviter])
-            db.invites[inviter] = 0;
-
-        db.invites[inviter]++;
-
-        delete db.pending[memberId];
-        delete db.messages[memberId];
-
-        save(db);
-
-        return inviter;
-    },
-
-    getInvites(userId) {
-        const db = load();
-
-        return db.invites[userId] || 0;
-    },
-
-    getLeaderboard() {
-        const db = load();
-
-        return Object.entries(db.invites)
-            .sort((a, b) => b[1] - a[1]);
-    }
-
-};
+module.exports = { initDB, addInvite, getInvites };
