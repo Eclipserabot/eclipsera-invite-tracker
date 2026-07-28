@@ -87,29 +87,37 @@ client.on(Events.GuildMemberAdd, async member => {
 
     const oldInvites = inviteCache.get(guild.id);
 
-    // Discord ko invite uses update karne ka time do
-    await new Promise(resolve => setTimeout(resolve, 3000));
+    await new Promise(resolve => setTimeout(resolve, 5000));
 
     const newInvites = await guild.invites.fetch();
 
-    const usedInvite = newInvites.find(invite => {
+    let usedInvite = null;
+
+    for (const invite of newInvites.values()) {
 
         const oldInvite = oldInvites?.get(invite.code);
 
-        return oldInvite && invite.uses > oldInvite.uses;
+        if (!oldInvite) continue;
 
-    });
+        if (invite.uses > oldInvite.uses) {
+            usedInvite = invite;
+            break;
+        }
+
+    }
 
     inviteCache.set(guild.id, new Collection());
 
-    newInvites.forEach(invite => {
+    for (const invite of newInvites.values()) {
         inviteCache.get(guild.id).set(invite.code, invite);
-    });
+    }
 
     if (!usedInvite) {
-        console.log(`${member.user.tag} joined but invite could not be detected.`);
+        console.log("Could not detect used invite.");
         return;
     }
+
+    console.log(`${member.user.tag} joined using ${usedInvite.code}`);
 
     db.addPending(
         member.id,
@@ -117,10 +125,7 @@ client.on(Events.GuildMemberAdd, async member => {
         guild.id
     );
 
-    console.log(
-        `${member.user.tag} joined using ${usedInvite.code}`
-    );
-
+});
 });
 client.on(Events.MessageCreate, async message => {
 
