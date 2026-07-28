@@ -94,4 +94,27 @@ saveDB(db);
 
 console.log("Pending invite saved.");
 });
+client.on(Events.InteractionCreate, async (interaction) => {
+
+    if (!interaction.isChatInputCommand()) return;
+
+    if (interaction.commandName === "invites") {
+
+        await interaction.reply({
+            content: "✅ Bot is working! Invite system is under setup.",
+            ephemeral: true
+        });
+
+    }
+
+    if (interaction.commandName === "top") {
+
+        await interaction.reply({
+            content: "🏆 Leaderboard is under setup.",
+            ephemeral: true
+        });
+
+    }
+
+});
 client.login(process.env.TOKEN);
