@@ -33,3 +33,5 @@ client.once(Events.ClientReady, async () => {
 
   console.log("Invite cache loaded.");
 });
+
+client.login(process.env.TOKEN);
