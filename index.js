@@ -126,7 +126,7 @@ client.on(Events.GuildMemberAdd, async member => {
     );
 
 });
-});
+
 client.on(Events.MessageCreate, async message => {
 
     if (message.author.bot) return;
