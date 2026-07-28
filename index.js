@@ -1,5 +1,15 @@
 require("dotenv").config();
+const fs = require("fs");
 
+const DB_FILE = "./database.json";
+
+function loadDB() {
+    return JSON.parse(fs.readFileSync(DB_FILE, "utf8"));
+}
+
+function saveDB(data) {
+    fs.writeFileSync(DB_FILE, JSON.stringify(data, null, 2));
+}
 const {
   Client,
   GatewayIntentBits,
@@ -72,6 +82,16 @@ client.on(Events.GuildMemberAdd, async (member) => {
     console.log(
         `✅ ${member.user.tag} joined using ${usedInvite.code} | Inviter: ${usedInvite.inviter?.tag}`
     );
+const db = loadDB();
 
+db.pending[member.id] = {
+    inviterId: usedInvite.inviter.id,
+    inviterTag: usedInvite.inviter.tag,
+    inviteCode: usedInvite.code
+};
+
+saveDB(db);
+
+console.log("Pending invite saved.");
 });
 client.login(process.env.TOKEN);
