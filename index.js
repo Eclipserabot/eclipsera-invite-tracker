@@ -14,9 +14,11 @@ const {
   Client,
   GatewayIntentBits,
   Events,
-  Collection
+  Collection,
+  REST,
+  Routes,
+  SlashCommandBuilder
 } = require("discord.js");
-
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -29,7 +31,33 @@ const inviteCache = new Collection();
 
 client.once(Events.ClientReady, async () => {
   console.log(`Logged in as ${client.user.tag}`);
+const commands = [
+    new SlashCommandBuilder()
+        .setName("invites")
+        .setDescription("Show verified invites")
+        .addUserOption(option =>
+            option
+                .setName("user")
+                .setDescription("User to check")
+                .setRequired(false)
+        ),
 
+    new SlashCommandBuilder()
+        .setName("top")
+        .setDescription("Show the invite leaderboard")
+].map(command => command.toJSON());
+
+const rest = new REST({ version: "10" }).setToken(process.env.TOKEN);
+
+await rest.put(
+    Routes.applicationGuildCommands(
+        process.env.CLIENT_ID,
+        process.env.GUILD_ID
+    ),
+    { body: commands }
+);
+
+console.log("✅ Slash commands updated.");
   const guild = await client.guilds.fetch(process.env.GUILD_ID);
 
   const invites = await guild.invites.fetch();
