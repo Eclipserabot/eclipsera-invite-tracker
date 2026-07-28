@@ -132,14 +132,29 @@ client.on(Events.MessageCreate, (message) => {
     if (!db.messages[message.author.id]) {
         db.messages[message.author.id] = 0;
     }
+db.messages[message.author.id]++;
 
-    db.messages[message.author.id]++;
+console.log(
+    `${message.author.tag} : ${db.messages[message.author.id]}/5`
+);
+
+if (db.messages[message.author.id] >= 5) {
+
+    if (!db.invites[pending.inviterId]) {
+        db.invites[pending.inviterId] = 0;
+    }
+
+    db.invites[pending.inviterId]++;
+
+    delete db.pending[message.author.id];
+    delete db.messages[message.author.id];
 
     console.log(
-        `${message.author.tag} : ${db.messages[message.author.id]}/5`
+        `✅ Invite verified for ${pending.inviterTag}`
     );
+}
 
-    saveDB(db);
-
+saveDB(db);
+    
 });
 client.login(process.env.TOKEN);
