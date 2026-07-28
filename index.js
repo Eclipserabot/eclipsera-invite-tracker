@@ -4,8 +4,9 @@ const {
     Client,
     GatewayIntentBits,
     Partials,
-    Events,
-    EmbedBuilder
+    Collection,
+    EmbedBuilder,
+    Events
 } = require("discord.js");
 
 const db = require("./database");
@@ -15,147 +16,171 @@ const client = new Client({
         GatewayIntentBits.Guilds,
         GatewayIntentBits.GuildMembers,
         GatewayIntentBits.GuildMessages,
-        GatewayIntentBits.GuildInvites,
         GatewayIntentBits.MessageContent
     ],
-    partials: [Partials.Channel]
+    partials: [
+        Partials.Channel
+    ]
 });
 
-const invites = new Map();
+// Invite Cache
+const invites = new Collection();
 
 client.once(Events.ClientReady, async () => {
 
-    console.log(`Logged in as ${client.user.tag}`);
+    console.log(`${client.user.tag} is online!`);
 
     for (const guild of client.guilds.cache.values()) {
+
         try {
+
             const guildInvites = await guild.invites.fetch();
+
             invites.set(guild.id, guildInvites);
+
+            console.log(
+                `Cached ${guildInvites.size} invites for ${guild.name}`
+            );
+
         } catch (err) {
-            console.error(err);
+
+            console.log(
+                `Couldn't cache invites for ${guild.name}`
+            );
+
         }
+
     }
+
 });
 
-client.on(Events.InviteCreate, async invite => {
-    const guildInvites = await invite.guild.invites.fetch();
-    invites.set(invite.guild.id, guildInvites);
+// New Invite Created
+client.on(Events.InviteCreate, invite => {
+
+    const guildInvites = invites.get(invite.guild.id);
+
+    if (guildInvites)
+        guildInvites.set(invite.code, invite);
+
 });
 
-client.on(Events.InviteDelete, async invite => {
-    const guildInvites = await invite.guild.invites.fetch();
-    invites.set(invite.guild.id, guildInvites);
+// Invite Deleted
+client.on(Events.InviteDelete, invite => {
+
+    const guildInvites = invites.get(invite.guild.id);
+
+    if (guildInvites)
+        guildInvites.delete(invite.code);
+
 });
-
-client.on(Events.GuildMemberAdd, async member => {
-
-    console.log(`${member.user.tag} joined`);
+// Member Joined
+client.on(Events.GuildMemberAdd, async (member) => {
 
     const oldInvites = invites.get(member.guild.id);
-    const newInvites = await member.guild.invites.fetch();
 
-    invites.set(member.guild.id, newInvites);
+    let newInvites;
 
-    let usedInvite = null;
-
-    for (const invite of newInvites.values()) {
-
-        const oldInvite = oldInvites?.get(invite.code);
-
-        if (!oldInvite || invite.uses > oldInvite.uses) {
-            usedInvite = invite;
-            break;
-        }
-    }
-
-    if (!usedInvite) {
-        console.log("Invite not detected.");
+    try {
+        newInvites = await member.guild.invites.fetch();
+        invites.set(member.guild.id, newInvites);
+    } catch (err) {
+        console.error("Failed to fetch invites:", err);
         return;
     }
 
-    db.addPending(member.id, usedInvite.inviter.id);
+    const usedInvite = newInvites.find(invite => {
+        const old = oldInvites?.get(invite.code);
+        return old && invite.uses > old.uses;
+    });
+
+    if (!usedInvite) {
+        console.log(`${member.user.tag} joined but invite not detected.`);
+        return;
+    }
 
     console.log(
-        `${member.user.tag} joined using ${usedInvite.code}. Waiting for 5 messages.`
+        `${member.user.tag} joined using ${usedInvite.code} by ${usedInvite.inviter.tag}`
     );
+
+    db.addPending(
+        member.id,
+        usedInvite.inviter.id
+    );
+
 });
-client.on(Events.MessageCreate, async message => {
+// Count Messages
+client.on(Events.MessageCreate, async (message) => {
 
     if (message.author.bot) return;
+
     if (!message.guild) return;
-
-    const inviter = db.getInviter(message.author.id);
-
-    if (!inviter) return;
 
     const count = db.addMessage(message.author.id);
 
-    console.log(`${message.author.tag} message count: ${count}`);
+    if (count !== 5) return;
 
-    if (count >= 5) {
+    const inviter = db.completeInvite(message.author.id);
 
-        db.completeInvite(message.author.id);
+    if (!inviter) return;
 
-        console.log(
-            `${message.author.tag} reached 5 messages. Invite counted.`
-        );
+    console.log(
+        `${message.author.tag} completed verification. Invite credited to ${inviter}`
+    );
 
-        try {
-            await message.channel.send(
-                `🎉 <@${inviter}> received **+1 invite** because <@${message.author.id}> completed 5 messages!`
-            );
-        } catch (err) {
-            console.error(err);
-        }
-    }
 });
 
-client.on(Events.InteractionCreate, async interaction => {
+// Slash Commands
+client.on(Events.InteractionCreate, async (interaction) => {
 
     if (!interaction.isChatInputCommand()) return;
 
     if (interaction.commandName === "invites") {
 
-        const user =
-            interaction.options.getUser("user") || interaction.user;
-
-        const count = db.getInvites(user.id);
+        const invites = db.getInvites(interaction.user.id);
 
         const embed = new EmbedBuilder()
-            .setColor(0x5865F2)
-            .setTitle("Invite Count")
-            .setDescription(
-                `👤 **${user.username}** has **${count}** valid invites.`
-            );
+            .setTitle("Your Invites")
+            .setDescription(`✅ Verified Invites: **${invites}**`)
+            .setColor("Green");
 
         return interaction.reply({
             embeds: [embed]
         });
+
     }
 
     if (interaction.commandName === "leaderboard") {
 
         const leaderboard = db.getLeaderboard();
 
-        if (leaderboard.length === 0) {
-            return interaction.reply("No invites recorded yet.");
+        if (!leaderboard.length) {
+
+            return interaction.reply({
+                content: "No verified invites yet."
+            });
+
         }
 
         let text = "";
 
-        leaderboard.slice(0, 10).forEach(([id, invites], index) => {
-            text += `**${index + 1}.** <@${id}> — **${invites}** invites\n`;
+        leaderboard.slice(0, 10).forEach((user, index) => {
+
+            text += `${index + 1}. <@${user[0]}> — **${user[1]}** invites\n`;
+
         });
 
         const embed = new EmbedBuilder()
-            .setColor(0x57F287)
             .setTitle("🏆 Invite Leaderboard")
-            .setDescription(text);
+            .setDescription(text)
+            .setColor("Gold");
 
         return interaction.reply({
             embeds: [embed]
         });
+
     }
+
 });
 
+// Login
 client.login(process.env.TOKEN);
