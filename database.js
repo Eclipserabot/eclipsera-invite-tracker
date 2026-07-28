@@ -2,8 +2,8 @@ const { Client, GatewayIntentBits, SlashCommandBuilder, REST, Routes } = require
 const Database = require('better-sqlite3');
 
 // Yaha apna token aur client id daal do
-const TOKEN = 'MTIzNDU2Nzg5MDEyMzQ1Njc4OTAxMjM0NTY3ODkw'; 
-const CLIENT_ID = '1234567890123456789';
+const TOKEN = 'PASTE_YOUR_TOKEN_HERE'; 
+const CLIENT_ID = 'PASTE_YOUR_CLIENT_ID_HERE';
 
 const client = new Client({
   intents: [
@@ -19,7 +19,8 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS invites (
     inviterId TEXT,
     inviteeId TEXT UNIQUE,
-    guildId TEXT
+    guildId TEXT,
+    verified INTEGER DEFAULT 0  -- 0 = pending, 1 = 5 msg complete
   );
   CREATE TABLE IF NOT EXISTS messageCounts (
     userId TEXT,
@@ -47,7 +48,8 @@ client.on('guildMemberAdd', async (member) => {
 
   const usedInvite = newInvites.find(inv => inv.uses > oldInvites.get(inv.code)?.uses || 0);
   if (usedInvite && usedInvite.inviter) {
-    const stmt = db.prepare('INSERT OR IGNORE INTO invites (inviterId, inviteeId, guildId) VALUES (?, ?, ?)');
+    // Join par verified = 0 ke saath save karo
+    const stmt = db.prepare('INSERT OR IGNORE INTO invites (inviterId, inviteeId, guildId, verified) VALUES (?, ?, 0)');
     stmt.run(usedInvite.inviter.id, member.id, guild.id);
     console.log(`${member.user.tag} joined. Waiting for 5 messages...`);
   }
@@ -58,9 +60,9 @@ client.on('messageCreate', (message) => {
   const userId = message.author.id;
   const guildId = message.guild.id;
 
-  const checkInvite = db.prepare('SELECT inviterId FROM invites WHERE inviteeId = ? AND guildId = ?');
+  const checkInvite = db.prepare('SELECT inviterId, verified FROM invites WHERE inviteeId = ? AND guildId = ?');
   const inviteData = checkInvite.get(userId, guildId);
-  if (!inviteData) return;
+  if (!inviteData || inviteData.verified === 1) return; // Agar pehle se verified hai to skip
 
   const getCount = db.prepare('SELECT count FROM messageCounts WHERE userId = ? AND guildId = ?');
   let data = getCount.get(userId, guildId);
@@ -71,9 +73,10 @@ client.on('messageCreate', (message) => {
   console.log(`${message.author.tag} message count: ${newCount}/5`);
 
   if (newCount === 5) {
-    db.prepare('INSERT OR REPLACE INTO invites (inviterId, inviteeId, guildId) VALUES (?, ?, ?)').run(inviteData.inviterId, userId, guildId);
+    // 5 ho gaye to verified = 1 kar do
+    db.prepare('UPDATE invites SET verified = 1 WHERE inviteeId = ? AND guildId = ?').run(userId, guildId);
     db.prepare('DELETE FROM messageCounts WHERE userId = ? AND guildId = ?').run(userId, guildId);
-    console.log(`✅ ${message.author.tag} completed 5 messages! Invite counted for ${inviteData.inviterId}`);
+    console.log(`✅ ${message.author.tag} completed 5 messages! Invite VERIFIED for ${inviteData.inviterId}`);
   }
 });
 
@@ -87,13 +90,17 @@ rest.put(Routes.applicationCommands(CLIENT_ID), { body: commands });
 
 client.on('interactionCreate', async (interaction) => {
   if (!interaction.isCommand()) return;
+  
   if (interaction.commandName === 'invites') {
-    const stmt = db.prepare('SELECT COUNT(*) as count FROM invites WHERE inviterId = ? AND guildId = ?');
+    // Sirf verified = 1 wale count karo
+    const stmt = db.prepare('SELECT COUNT(*) as count FROM invites WHERE inviterId = ? AND guildId = ? AND verified = 1');
     const result = stmt.get(interaction.user.id, interaction.guild.id);
-    interaction.reply(`You have **${result.count}** invites.`);
+    interaction.reply(`You have **${result.count}** verified invites.`);
   }
+  
   if (interaction.commandName === 'top') {
-    const stmt = db.prepare('SELECT inviterId, COUNT(*) as count FROM invites WHERE guildId = ? GROUP BY inviterId ORDER BY count DESC LIMIT 10');
+    // Leaderboard me bhi sirf verified
+    const stmt = db.prepare('SELECT inviterId, COUNT(*) as count FROM invites WHERE guildId = ? AND verified = 1 GROUP BY inviterId ORDER BY count DESC LIMIT 10');
     const results = stmt.all(interaction.guild.id);
     let text = '**Top Inviters:**\n';
     results.forEach((r, i) => text += `${i+1}. <@${r.inviterId}> - ${r.count}\n`);
