@@ -4,80 +4,74 @@ const FILE = "./database.json";
 
 function load() {
     if (!fs.existsSync(FILE)) {
-        return {
+        fs.writeFileSync(FILE, JSON.stringify({
             invites: {},
             pending: {},
             messages: {}
-        };
+        }, null, 2));
     }
 
-    return JSON.parse(fs.readFileSync(FILE, "utf8"));
+    return JSON.parse(fs.readFileSync(FILE));
 }
 
 function save(data) {
     fs.writeFileSync(FILE, JSON.stringify(data, null, 2));
 }
 
-function addPending(userId, inviterId) {
-    const data = load();
-    data.pending[userId] = inviterId;
-    data.messages[userId] = 0;
-    save(data);
-}
+module.exports = {
 
-function addMessage(userId) {
-    const data = load();
+    addPending(memberId, inviterId) {
+        const db = load();
 
-    if (data.messages[userId] === undefined) return 0;
+        db.pending[memberId] = inviterId;
+        db.messages[memberId] = 0;
 
-    data.messages[userId]++;
+        save(db);
+    },
 
-    save(data);
+    addMessage(memberId) {
+        const db = load();
 
-    return data.messages[userId];
-}
+        if (!(memberId in db.messages)) return 0;
 
-function getInviter(userId) {
-    const data = load();
-    return data.pending[userId];
-}
+        db.messages[memberId]++;
 
-function completeInvite(userId) {
-    const data = load();
+        save(db);
 
-    const inviterId = data.pending[userId];
+        return db.messages[memberId];
+    },
 
-    if (!inviterId) return;
+    completeInvite(memberId) {
+        const db = load();
 
-    if (!data.invites[inviterId]) {
-        data.invites[inviterId] = 0;
+        const inviter = db.pending[memberId];
+
+        if (!inviter) return null;
+
+        if (!db.invites[inviter])
+            db.invites[inviter] = 0;
+
+        db.invites[inviter]++;
+
+        delete db.pending[memberId];
+        delete db.messages[memberId];
+
+        save(db);
+
+        return inviter;
+    },
+
+    getInvites(userId) {
+        const db = load();
+
+        return db.invites[userId] || 0;
+    },
+
+    getLeaderboard() {
+        const db = load();
+
+        return Object.entries(db.invites)
+            .sort((a, b) => b[1] - a[1]);
     }
 
-    data.invites[inviterId]++;
-
-    delete data.pending[userId];
-    delete data.messages[userId];
-
-    save(data);
-}
-
-function getInvites(userId) {
-    const data = load();
-    return data.invites[userId] || 0;
-}
-
-function getLeaderboard() {
-    const data = load();
-
-    return Object.entries(data.invites)
-        .sort((a, b) => b[1] - a[1]);
-}
-
-module.exports = {
-    addPending,
-    addMessage,
-    getInviter,
-    completeInvite,
-    getInvites,
-    getLeaderboard
 };
