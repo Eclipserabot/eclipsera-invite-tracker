@@ -110,47 +110,7 @@ client.on(Events.MessageCreate, async message => {
     }
 });
 
-client.on(Events.InviteCreate, async invite => {
-    const guildInvites = await invite.guild.invites.fetch();
-    invites.set(invite.guild.id, guildInvites);
-});
 
-client.on(Events.InviteDelete, async invite => {
-    const guildInvites = await invite.guild.invites.fetch();
-    invites.set(invite.guild.id, guildInvites);
-});
-
-client.on(Events.GuildMemberAdd, async member => {
-
-    console.log(`${member.user.tag} joined`);
-
-    const oldInvites = invites.get(member.guild.id);
-    const newInvites = await member.guild.invites.fetch();
-
-    invites.set(member.guild.id, newInvites);
-
-    let usedInvite = null;
-
-    for (const invite of newInvites.values()) {
-
-        const oldInvite = oldInvites?.get(invite.code);
-
-        if (!oldInvite || invite.uses > oldInvite.uses) {
-            usedInvite = invite;
-            break;
-        }
-    }
-
-    if (!usedInvite) {
-        console.log("Invite not detected.");
-        return;
-    }
-
-    db.addPending(member.id, usedInvite.inviter.id);
-
-    console.log(
-        `${member.user.tag} joined using ${usedInvite.code}. Waiting for 5 messages.`
-    );
 });
 client.on(Events.InteractionCreate, async interaction => {
 
