@@ -192,8 +192,11 @@ if (db.messages[message.author.id] >= 5) {
 
     db.invites[pending.inviterId]++;
 
-    delete db.pending[message.author.id];
-    delete db.messages[message.author.id];
+// Save verified member
+db.verified[message.author.id] = pending.inviterId;
+
+delete db.pending[message.author.id];
+delete db.messages[message.author.id];
 
     console.log(
         `✅ Invite verified for ${pending.inviterTag}`
@@ -202,5 +205,23 @@ if (db.messages[message.author.id] >= 5) {
 
 saveDB(db);
     
+});
+client.on(Events.GuildMemberRemove, (member) => {
+
+    const db = loadDB();
+
+    const inviterId = db.verified[member.id];
+
+    if (!inviterId) return;
+
+    if (db.invites[inviterId] && db.invites[inviterId] > 0) {
+        db.invites[inviterId]--;
+    }
+
+    delete db.verified[member.id];
+
+    saveDB(db);
+
+    console.log(`❌ ${member.user.tag} left. Invite removed.`);
 });
 client.login(process.env.TOKEN);
